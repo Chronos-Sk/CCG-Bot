@@ -19,7 +19,6 @@ async def post_deck(ctx: Context, decklist: Decklist) -> None:
   embed = Embed(title=decklist.name, url=decklist.url, description=cards)
   embed.set_author(name=decklist.author, url=decklist.author_url)
   embed.set_thumbnail(url=decklist.thumbnail)
-  print(embed.to_dict())
   await ctx.send(embed=embed)
 
 ### Handlers ###

@@ -20,6 +20,8 @@ async def on_ready() -> None:
 
 @bot.command()
 async def decklist(ctx: Context, url: str) -> None:
+  if url.startswith('<') and url.endswith('>'):
+    url = url[1:-1]
   handler = decklist_handlers.lookup(url)
   await handler(ctx, url)
 
