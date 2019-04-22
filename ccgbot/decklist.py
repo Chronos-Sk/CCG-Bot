@@ -1,10 +1,13 @@
 from collections import defaultdict
 import re
 
+from absl import logging
 from discord.embeds import Embed
+import typing
 from typing import DefaultDict, List, Optional, Tuple, Union
 
-from ccgbot.card import Card
+from ccgbot import manamojidb
+from ccgbot.carddb import Card
 
 class Decklist:
   def __init__(self,
@@ -22,8 +25,13 @@ class Decklist:
   
   def add_card(self, card: Union[str, Card], count: int = 1) -> None:
     if isinstance(card, str):
-      card = Card.lookup(card)
-    self._cards[card] += count
+      card_obj = Card.lookup(card)
+    else:
+      card_obj = card
+    if not card:
+      logging.info('Unknown card: %s', card)
+      card_obj = Card.unknown()
+    self._cards[typing.cast(Card, card_obj)] += count
 
   def parse_from_mtga(self, text: str) -> None:
     regex = re.compile(r'(\d+) (.+) \(')
@@ -35,11 +43,29 @@ class Decklist:
   def _sorted_cards(self) -> List[Tuple[Card, int]]:
     return sorted(self._cards.items())
 
-  def to_embed(self) -> Embed:
-    body = '\n'.join(f'{num} {card.name}' for card, num in self._sorted_cards())
-    embed = Embed(title=self.name, url=self.url, description=body)
+  def _get_cards_by_type(self):
+    cards_by_type = defaultdict(list)
+    for card, count in self._cards.items():
+      cards_by_type[card.types[0]].append((card, count))
+    for _, cards in cards_by_type.items():
+      cards.sort()
+    return cards_by_type
+
+  def to_embed(self, flat: bool = False) -> Embed:
+    #body = '\n'.join(f'{num} {card.name} {card.cost}' for card, num in self._sorted_cards())
+    #body = manamojidb.substitute(body)
+    embed = Embed(title=self.name, url=self.url)
     embed.set_author(name=self.author, url=self.author_url)
     embed.set_thumbnail(url=self.thumbnail)
+    cards_by_type = self._get_cards_by_type()
+    for type_ in ['Land', 'Creature', 'Sorcery', 'Instant',
+                  'Artifact', 'Enchantment', 'Plainswalker']:
+      cards_body = '\n'.join(f'{num} {card.name}' + (f'   {card.cost}' if flat else '')
+                             for card, num in cards_by_type.get(type_, []))
+      if not cards_body:
+        continue
+      cards_body = manamojidb.substitute(cards_body)
+      embed.add_field(name=type_, value=cards_body, inline=not flat)
     return embed
 
   @property

@@ -1,4 +1,7 @@
 absl-py
+aiosqlite
 # Can't just use discord.py, since it doesn't support Python 3.7.
 https://github.com/Rapptz/discord.py/archive/rewrite.zip#egg=discord.py
+gcloud-aio-storage
+-e git+https://github.com/mtgjson/mtgsqlive.git#egg=mtgsqlive
 requests_async
