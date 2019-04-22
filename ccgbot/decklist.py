@@ -52,8 +52,6 @@ class Decklist:
     return cards_by_type
 
   def to_embed(self, flat: bool = False) -> Embed:
-    #body = '\n'.join(f'{num} {card.name} {card.cost}' for card, num in self._sorted_cards())
-    #body = manamojidb.substitute(body)
     embed = Embed(title=self.name, url=self.url)
     embed.set_author(name=self.author, url=self.author_url)
     embed.set_thumbnail(url=self.thumbnail)
