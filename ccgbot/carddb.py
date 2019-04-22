@@ -5,7 +5,6 @@ import json
 from absl import flags
 from absl import logging
 from aiohttp import ClientResponseError
-import aiosqlite
 from gcloud.aio.storage import Storage, Bucket
 import requests_async as requests
 import typing
@@ -18,7 +17,7 @@ CARDDB_DB_FILE = 'carddb.json'
 CARDDB_VERSION_FILE = 'carddb.version.json'
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string('carddb_local_file', None, 'Forces loading from a local sqlite file.')
+flags.DEFINE_string('carddb_local_file', None, 'Forces loading from a local json file.')
 
 class Card(NamedTuple):
   name: str
@@ -37,6 +36,17 @@ class Card(NamedTuple):
 
 UNKNOWN_CARD = Card('Unknown', tuple(), tuple(), 0, '')
 
+async def _download_blob(bucket: Bucket, name: str) -> bytes:
+  blob = await bucket.get_blob(name)
+  return await blob.download()
+
+async def _upload_blob(bucket: Bucket, name: str, content: str) -> None:
+  try:
+    blob = await bucket.get_blob(name)
+  except ClientResponseError:
+    blob = await bucket.new_blob(name)
+  await blob.upload(content)
+
 class CardDb:
   @classmethod
   def get(cls) -> 'CardDb':
@@ -46,7 +56,7 @@ class CardDb:
 
   def __init__(self):
     self._database = {}
-    self._initialized = False
+    self._is_initialized = asyncio.Event()
 
   async def initialize(self) -> None:
     logging.vlog(1, 'Initializing CardDb.')
@@ -58,14 +68,15 @@ class CardDb:
       storage = Storage()
       bucket = storage.get_bucket(CARDDB_BUCKET)
       try:
-        current_version_json = await bucket.get_blob(CARDDB_VERSION_FILE).download()
+        current_version_json = await _download_blob(bucket, CARDDB_VERSION_FILE)
       except ClientResponseError as ex:
         logging.error('Could not load CardDb current version from cloud repo: %s', ex)
         current_version = 'unknown'
       else:
         current_version = json.loads(current_version_json)['version']
         logging.vlog(1, 'CardDb current database version: %s', current_version)
-      remote_version_json = await requests.get(VERSION_URL)
+      remote_version_response = await requests.get(VERSION_URL, timeout=60, verify=False)
+      remote_version_json = remote_version_response.text
       remote_version = json.loads(remote_version_json)['version']
       logging.vlog(1, 'CardDb remote database version: %s', remote_version)
       version_mismatch = current_version != remote_version
@@ -73,20 +84,20 @@ class CardDb:
         logging.info('CardDb version mismatch (%s != %s). Loading from remote.',
                      current_version, remote_version)
         db_json = await self._fetch_remote_database()
-        await bucket.get_blob(CARDDB_VERSION_FILE).upload(remote_version_json)
+        logging.info('Uploading new CardDb file.')
+        await _upload_blob(bucket, CARDDB_DB_FILE, db_json)
+        await _upload_blob(bucket, CARDDB_VERSION_FILE, remote_version_json)
+        logging.info('CardDb successfully uploaded.')
       else:
         logging.vlog(1, 'Loading CardDb from cloud storage.')
-        db_json = await self._fetch_cloud_database(bucket)
+        db_json = await _download_blob(bucket, CARDDB_DB_FILE)
+        logging.info('CardDb file loaded from cloud storage.')
     await self._parse_db_json(db_json)
     self._initialized = True
 
   @staticmethod
-  async def _fetch_cloud_database(bucket: Bucket) -> str:
-    return await bucket.get_blob(CARDDB_DB_FILE).download()
-
-  @staticmethod
   async def _fetch_remote_database() -> str:
-    response = await requests.get(REMOTE_DB_URL, timeout=60)
+    response = await requests.get(REMOTE_DB_URL, timeout=60, verify=False)
     return response.text
 
   async def _parse_db_json(self, json_blob: str) -> None:
@@ -108,8 +119,11 @@ class CardDb:
         self._database[double_name] = double_card
 
   def lookup(self, card_name: str) -> Optional[Card]:
-    assert self._initialized
+    assert self._is_initialized.is_set()
     return self._database.get(card_name, None)
 
+  async def wait_for_initialized(self):
+    await typing.cast(Awaitable, self._is_initialized.wait())
+
   _database: Dict[str, Card]
-  _initialized: bool
+  _is_initialized: asyncio.Event

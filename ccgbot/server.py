@@ -18,7 +18,7 @@ bot = commands.Bot(command_prefix='!')
 @bot.event
 async def on_ready() -> None:
   logging.info('Logged in as %s (%s)', bot.user.name, bot.user.id)
-  await ManamojiDb.get().initialize(bot)
+  await _initialize()
 
 @bot.command()
 async def decklist(ctx: Context, url: str, mode: str = 'compact') -> None:
@@ -35,14 +35,16 @@ async def decklist(ctx: Context, url: str, mode: str = 'compact') -> None:
   else:
     logging.info('No decklist found for: %s', url)
 
-async def setUp() -> str:
-  discord_token, _, = await asyncio.gather(token.get(), CardDb.get().initialize())
-  return discord_token
+async def _initialize():
+  try:
+    await asyncio.gather(CardDb.get().initialize(), ManamojiDb.get().initialize(bot))
+  except:
+    logging.exception('Bot initialization has failed.')
+    logging.fatal('Dying due to failed initialization.')
 
 def main(argv):
   if len(argv) > 1: logging.fatal('Unexpected nonflag arguments: %s', argv)
-  discord_token = asyncio.run(setUp())
-  bot.run(discord_token)
+  bot.run(token.get())
 
 if __name__=='__main__':
   app.run(main)
