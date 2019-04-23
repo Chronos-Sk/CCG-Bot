@@ -1,4 +1,6 @@
 from collections import defaultdict
+import html
+import pprint
 import re
 
 from absl import logging
@@ -28,20 +30,19 @@ class Decklist:
       card_obj = Card.lookup(card)
     else:
       card_obj = card
-    if not card:
+    if not card_obj:
       logging.info('Unknown card: %s', card)
       card_obj = Card.unknown()
-    self._cards[typing.cast(Card, card_obj)] += count
+    self._cards[card_obj] += count
 
   def parse_from_mtga(self, text: str) -> None:
+    text = html.unescape(text)
     regex = re.compile(r'(\d+) (.+) \(')
     for line in text.splitlines():
       match = regex.match(line)
       if match:
+        logging.vlog(1, 'Found card match: %s of %s', match.group(1), match.group(2))
         self.add_card(match.group(2), int(match.group(1)))
-
-  def _sorted_cards(self) -> List[Tuple[Card, int]]:
-    return sorted(self._cards.items())
 
   def _get_cards_by_type(self):
     cards_by_type = defaultdict(list)
@@ -52,12 +53,14 @@ class Decklist:
     return cards_by_type
 
   def to_embed(self, flat: bool = False) -> Embed:
-    embed = Embed(title=self.name, url=self.url)
-    embed.set_author(name=self.author, url=self.author_url)
-    embed.set_thumbnail(url=self.thumbnail)
+    embed = Embed(title=self.name or '', url=self.url or Embed.Empty)
+    embed.set_author(name=self.author or '', url=self.author_url or Embed.Empty)
+    embed.set_thumbnail(url=self.thumbnail or Embed.Empty)
     cards_by_type = self._get_cards_by_type()
+    if logging.vlog_is_on(1):
+      logging.vlog(1, 'Cards by type are: %s', pprint.pformat(cards_by_type))
     for type_ in ['Land', 'Creature', 'Sorcery', 'Instant',
-                  'Artifact', 'Enchantment', 'Plainswalker']:
+                  'Artifact', 'Enchantment', 'Plainswalker', 'Unknown']:
       cards_body = '\n'.join(f'{num} {card.name}' + (f'   {card.cost}' if flat else '')
                              for card, num in cards_by_type.get(type_, []))
       if not cards_body:

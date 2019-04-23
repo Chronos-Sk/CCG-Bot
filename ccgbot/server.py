@@ -26,7 +26,11 @@ async def decklist(ctx: Context, url: str, mode: str = 'compact') -> None:
     url = url[1:-1]
   logging.info('Looking up decklist for: %s', url)
   handler = decklist_handlers.lookup(url)
-  decklist = await handler(ctx, url)
+  try:
+    decklist = await handler(ctx, url)
+  except requests.RequestException:
+    logging.exception('RequestException during decklist handler.')
+    decklist = None
   if decklist:
     logging.info('Found decklist named: %s', decklist.name)
     if logging.vlog_is_on(1):

@@ -31,7 +31,7 @@ class Card(NamedTuple):
   def unknown(cls) -> 'Card':
     return UNKNOWN_CARD
 
-UNKNOWN_CARD = Card('Unknown', tuple(), tuple(), 0, '')
+UNKNOWN_CARD = Card('Unknown', tuple(['Unknown']), tuple(), 0, '')
 
 class CardDb:
   @classmethod

@@ -21,7 +21,8 @@ async def tapped_out_handler(ctx: Context, url: str):
     author_url = None
   thumbnail = 'http:' + thumbnail_match.group(1) if thumbnail_match else None
   if not cards_match:
-    return await ctx.author.send(f"Error parsing Tapped Out decklist.")
+    await ctx.author.send(f'Error parsing Tapped Out decklist.')
+    return
   cards = cards_match.group(1)
   decklist = Decklist(name=name, url=url, author=author, author_url=author_url, thumbnail=thumbnail)
   decklist.parse_from_mtga(cards)

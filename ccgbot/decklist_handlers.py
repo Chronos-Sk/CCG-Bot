@@ -1,6 +1,7 @@
 import re
 
 from ccgbot.decklist import Decklist
+from ccgbot.mtggoldfish import mtggoldfish_handler
 from ccgbot.tapped_out import tapped_out_handler
 
 from discord.ext.commands.context import Context
@@ -12,7 +13,8 @@ def lookup(url: str) -> DecklistHandler:
   return DecklistHandlers.get().lookup(url)
 
 async def _default_handler(ctx: Context, url: str):
-  return await ctx.author.send(f"Unknown decklist url: {url}")
+  await ctx.author.send(f"Unknown decklist url: {url}")
+  return
 
 class DecklistHandlers:
   @classmethod
@@ -24,7 +26,7 @@ class DecklistHandlers:
   def __init__(self, decklist_sites: Tuple[Tuple[str, DecklistHandler], ...]):
     handlers = []
     for pattern, handler in decklist_sites:
-      regex = re.compile(f'https?://{pattern}')
+      regex = re.compile(r'https?://(?:www\.)?' + pattern)
       handlers.append((regex, handler))
     self._handlers = tuple(handlers)
   
@@ -37,6 +39,8 @@ class DecklistHandlers:
   _handlers: Tuple[Tuple[Pattern, DecklistHandler], ...]
 
 DECKLIST_SITES = (
-  ('tappedout.net/mtg-decks/.+', tapped_out_handler),
+  ('tappedout.net/mtg-decks/', tapped_out_handler),
+  ('mtggoldfish.com/deck/', mtggoldfish_handler),
+  ('mtggoldfish.com/archetype/', mtggoldfish_handler)
 # ('.*', _default_handler)
 )
